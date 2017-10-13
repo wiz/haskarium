@@ -13,7 +13,6 @@ module Haskarium.Types
     ) where
 
 import           Graphics.Gloss (Point)
-import           System.Random (StdGen)
 
 type Angle = Float
 type Distance = Float
@@ -43,5 +42,4 @@ data World = World
     , centipedes :: ![Creature Centipede]
     , fleas :: ![Creature Flea]
     , flies :: ![Creature Fly]
-    , randomGen :: !StdGen
     }

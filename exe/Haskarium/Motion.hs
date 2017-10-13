@@ -19,42 +19,43 @@ import           Haskarium.Types (Angle, Ant, Centipede (..), Creature (..),
                                   World (..))
 import           Haskarium.Util (distance)
 
-updateCreature
-    :: Interactive (Creature s)
-    => Time -> Creature s -> (StdGen, [Creature s]) -> (StdGen, [Creature s])
-updateCreature dt creature (g, creatures) = (g', c : creatures)
-  where
-    (g', c) = creatureTurn (onTick dt creature) dt g
-
 class Interactive a where
-    onTick :: Time -> a -> a
-    onTick _ = id
+    onTick :: Time -> a -> StdGen -> (a, StdGen)
+    onTick _ a g = (a, g)
 
-    onEvent :: Event -> a -> a
-    onEvent _ = id
+    onEvent :: Event -> a -> StdGen -> (a, StdGen)
+    onEvent _ a g = (a, g)
 
 instance Interactive World where
-    onTick dt World{ants, centipedes, fleas, flies, randomGen = g0} = World
-        { ants        = ants'
-        , centipedes  = centipedes'
-        , fleas       = fleas'
-        , flies       = flies'
-        , randomGen   = g4
-        }
+    onTick dt World{ants, centipedes, fleas, flies} g0 = (world, g4)
       where
-        (g1, ants')       = foldr (updateCreature dt) (g0, []) ants
-        (g2, centipedes') = foldr (updateCreature dt) (g1, []) centipedes
-        (g3, fleas')      = foldr (updateCreature dt) (g2, []) fleas
-        (g4, flies')      = foldr (updateCreature dt) (g3, []) flies
+        world = World
+            { ants        = ants'
+            , centipedes  = centipedes'
+            , fleas       = fleas'
+            , flies       = flies'
+            }
+        (ants', g1)       = mapWithRandom (onTick dt) ants g0
+        (centipedes', g2) = mapWithRandom (onTick dt) centipedes g1
+        (fleas', g3)      = mapWithRandom (onTick dt) fleas g2
+        (flies', g4)      = mapWithRandom (onTick dt) flies g3
+
+mapWithRandom :: (a -> StdGen -> (b, StdGen)) -> [a] -> StdGen -> ([b], StdGen)
+mapWithRandom _    []    g0 = ([], g0)
+mapWithRandom f (x : xs) g0 = let
+    (y, g1) = f x g0
+    (ys, g2) = mapWithRandom f xs g1
+    in (y : ys, g2)
 
 instance Interactive (Creature Ant) where
-    onTick = run 20
+    onTick dt = creatureTurn dt . run 20 dt
 
 instance Interactive (Creature Fly) where
-    onTick = run 200
+    onTick dt = creatureTurn dt . run 200 dt
 
 instance Interactive (Creature Flea) where
     onTick dt creature@Creature{species = Flea{idleTime}} =
+        creatureTurn dt $
         if idleTime < fleaMaxIdleTime then
             creature{species = Flea{idleTime = idleTime + dt}}
         else
@@ -70,7 +71,7 @@ run speed dt creature = creatureMovedCheckCollisions creature dist
 
 instance Interactive (Creature Centipede) where
     onTick dt creature@Creature{species} =
-        runHead{species = Centipede{segments=newSegments}}
+        creatureTurn dt $ runHead{species = Centipede{segments=newSegments}}
       where
         Centipede{segments} = species
 
@@ -94,9 +95,9 @@ instance Interactive (Creature Centipede) where
 
         maxNeck = 1.5 * centipedeSegmentRadius
 
-creatureTurn :: Creature s -> Time -> StdGen -> (StdGen, Creature s)
-creatureTurn creature dt g =
-    (g', creature{targetDir = targetDir', currentDir = newCurrentDir})
+creatureTurn :: Time -> Creature s -> StdGen -> (Creature s, StdGen)
+creatureTurn dt creature g =
+    (creature{targetDir = targetDir', currentDir = newCurrentDir}, g')
   where
     Creature{targetDir, currentDir, turnRate} = creature
     (targetDir', g') =

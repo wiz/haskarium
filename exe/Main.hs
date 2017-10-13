@@ -16,8 +16,15 @@ main = do
     let (g2, centipedes)  = makeCreatures window g1 10
     let (g3, fleas)       = makeCreatures window g2 10
     let (g4, flies)       = makeCreatures window g3 10
-    let startWorld = World{ants, centipedes, fleas, flies, randomGen = g4}
-    play display white refreshRate startWorld draw onEvent onTick
+    let startWorld = (World{ants, centipedes, fleas, flies}, g4)
+    play
+        display
+        white
+        refreshRate
+        startWorld
+        (draw . fst)
+        (\dt (world, g) -> onEvent dt world g)
+        (\dt (world, g) -> onTick  dt world g)
   where
     window =
         ( (- fromIntegral width / 2, - fromIntegral height / 2)
